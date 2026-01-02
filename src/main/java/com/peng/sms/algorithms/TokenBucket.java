@@ -16,13 +16,12 @@ public class TokenBucket implements RateLimiter {
         this.lastRefillTime = System.currentTimeMillis();
     }
 
-    private void refill() {
+    private synchronized void refill() {
         long now = System.currentTimeMillis();
         long duration = now - lastRefillTime;
         long tokensToAdd = (duration * refillRate) / 1000;
         if(tokensToAdd > 0) {
-            long newTokenCount = Math.min(capacity, tokens.get() + tokensToAdd);
-            tokens.set(newTokenCount);
+            tokens.updateAndGet(current -> Math.min(capacity, current + tokensToAdd));
             lastRefillTime = now;
         }
     }
@@ -30,10 +29,7 @@ public class TokenBucket implements RateLimiter {
     @Override
     public boolean allow() {
         refill();
-        if (tokens.get() > 0) {
-            tokens.decrementAndGet();
-            return true;
-        }
-        return false;
+        long remaining = tokens.getAndUpdate(current -> current > 0 ? current - 1 : current);
+        return remaining > 0;
     }
 }
